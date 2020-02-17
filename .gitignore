@@ -127,3 +127,6 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Filtering out packaged.yaml
+packaged.yaml

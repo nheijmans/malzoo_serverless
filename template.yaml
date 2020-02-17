@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+Description:  Malzoo Serverless 
+Globals:
+  Function:
+    Timeout: 30
+
+Parameters:
+  SamplesBucket:
+    Type: String
+    Description: Name of the bucket to store the samples
+  
+Resources:
+  #  MalzooApi:
+  #    Type: 'AWS::Serverless::Api'
+  #    Properties:
+  #      StageName: 'Prod'
+  #      Auth:
+  #        ApiKeyRequired: true
+  #
+  #  MalzooApiPlan:
+  #    Type: 'AWS::ApiGateway::UsagePlan'
+  #    DependsOn:
+  #      - MalzooApi
+  #      - MalzooKeys
+  #    Properties:
+  #      ApiStages:
+  #        - ApiId: !Ref MalzooApi
+  #          Stage: 'Prod'
+  #      Description: Usage plan for API key
+  #
+  #  MalzooKeys:
+  #    Type: 'AWS::ApiGateway::ApiKey'
+  #    DependsOn:
+  #      - MalzooApi
+  #    Properties:
+  #      Enabled: true
+  #      StageKeys:
+  #        - RestApiId: !Ref MalzooApi
+  #          StageName: 'Prod'
+  #
+  #  MalzooUsageKey:
+  #    Type: AWS::ApiGateway::UsagePlanKey
+  #    DependsOn:
+  #      - MalzooApi
+  #      - MalzooKeys
+  #      - MalzooApiPlan
+  #    Properties:
+  #      KeyId: !Ref MalzooKeys
+  #      KeyType: 'API_KEY'
+  #      UsagePlanId: !Ref MalzooApiPlan
+  #
+  #================ FUNCTIONS ==================
+  DistributorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: distributor/
+      Handler: distributor.lambda_handler
+      Runtime: python3.7
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref SamplesBucket 
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ExecutableQueue.QueueName
+      Events:
+        SampleUploaded:
+          Type: S3
+          Properties:
+            Bucket: !Ref MalzooBucket
+            Events: s3:ObjectCreated:*
+      Environment: 
+        Variables:
+          BucketName: !Ref SamplesBucket
+          ExecutableQ: !Ref ExecutableQueue
+          Table: !Ref ResultsTable
+      Layers:
+        - !Ref HasherLayer
+      Tags:
+        project: malzoo
+  
+  SubmitAnalysisFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: submit_analysis/
+      Handler: sa.lambda_handler
+      Runtime: python3.7
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
+        - SQSPollerPolicy:
+            QueueName: !GetAtt SubmitResultsQueue.QueueName
+      Environment: 
+        Variables:
+          QueueUrl: !Ref SubmitResultsQueue
+          Table: !Ref ResultsTable
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt SubmitResultsQueue.Arn
+            BatchSize: 1
+      Tags:
+        project: malzoo
+
+  ReturnAnalysisFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: return_analysis/
+      Handler: ra.lambda_handler
+      Runtime: python3.7
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: MalzooResultsTable
+      Environment:
+        Variables:
+          Table: !Ref ResultsTable
+      Events:
+        AnalysisResults:
+          Type: Api
+          Properties:
+            Path: /analysis/results/{proxy+}
+            Method: get
+      Tags:
+        project: malzoo
+
+  ExeWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: exe_worker/
+      Handler: ew.lambda_handler
+      Runtime: python3.7
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref SamplesBucket 
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt SubmitResultsQueue.QueueName
+        - SQSPollerPolicy:
+            QueueName: !GetAtt ExecutableQueue.QueueName
+      Environment: 
+        Variables:
+          ResultsQueueUrl: !Ref SubmitResultsQueue
+          ExeQueueUrl: !Ref ExecutableQueue
+          BucketName: !Ref SamplesBucket
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ExecutableQueue.Arn
+            BatchSize: 1
+      Layers:
+        - !Ref HasherLayer
+      Tags:
+        project: malzoo
+
+  #================ LAYERS ==================
+  HasherLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: hashtool
+      Description: Layer to calculate Md5 and SHA-1 hash of a sample
+      ContentUri: layers/hasher/
+      CompatibleRuntimes:
+        - python3.7
+        - python3.6
+        - python2.7
+      LicenseInfo: MIT
+      RetentionPolicy: retain
+  
+  ToolKitLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: ToolKit
+      Description: Layer with multiple functions used across the Malzoo Application
+      ContentUri: layers/toolkit/
+      CompatibleRuntimes:
+        - python3.7
+        - python3.6
+        - python2.7
+      LicenseInfo: MIT
+      RetentionPolicy: retain
+      
+  #================ QUEUE ==================
+  SubmitResultsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MalzooResultsQueue
+
+  ExecutableQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: MalzooExecutableQueue
+
+  #================ DYNAMODB ==================
+  ResultsTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: MalzooResultsTable
+      PrimaryKey: 
+        Name: md5
+        Type: String
+    ProvisionedThroughput:
+      ReadCapacityUnits: 1
+      WriteCapacityUnits: 1
+    Tags:
+      project: malzoo
+      
+  #================ S3 BUCKET==================
+  MalzooBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref SamplesBucket
+
+Outputs:
+  MalzooApi:
+    Description: "API Gateway endpoint URL for Prod stage for Serverless Malzoo"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  MalzooSubmitQueueURL:
+    Description: "SQS Queue URL"
+    Value: !Ref SubmitResultsQueue
