@@ -3,10 +3,14 @@
 # Script to automatically build malzoo-serverless
 ######
 
-STACKNAME=$1
-DEPLOYBUCKET=$2
-BUCKETNAME=$3
-
+# build the package dependancies
 sam build -u --skip-pull-image
-sam package --s3-bucket $DEPLOYBUCKET --output-template-file packaged.yaml
-sam deploy --template-file packaged.yaml --stack-name $STACKNAME --parameter-overrides SamplesBucket=$BUCKETNAME --capabilities CAPABILITY_IAM
+
+# check if samconfig.toml file is present
+if [ ! -f samconfig.toml ]; then
+    echo "no samconfig.toml found, starting guided deploy"
+    sam deploy -g
+else
+    echo "samconfig.toml found, proceeding to deploy"
+    sam deploy
+fi
