@@ -4,7 +4,9 @@ Serverless implementation of the [Malzoo static file analyzer project](https://g
 
 The goal is to have a deployment-ready application template for mass static file analysis that everyone can use.
 The architecture is kept simple and similar to the original Malzoo project, with a distributor and workers dedicated to a certain filetype.
-![Malzoo Architecture](https://github.com/nheijmans/malzoo_serverless/images/malzoo_serverless.png)
+
+![Malzoo Architecture]
+(https://github.com/nheijmans/malzoo_serverless/images/malzoo_serverless.png)
 
 ### Credits
 Thanks at @marekq for working together on the SAM deployment template!
