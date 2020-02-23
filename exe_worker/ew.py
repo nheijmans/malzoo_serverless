@@ -4,8 +4,9 @@ import pefile
 import datetime
 from os import environ,path
 
-# import layer
+# import layers
 import hashtool
+import toolkit
 
 # set default variables and boto3 clients
 s3client    = boto3.client('s3')
@@ -14,11 +15,19 @@ sample_path = "/tmp/sample.bin"
 
 def lambda_handler(event, context):
     for record in event['Records']:
+        # remove the record from the queue
+#        resp = sqsclient.delete_message(QueueUrl=environ['ExeQueueUrl'],
+#                ReceiptHandle=record['receiptHandle'])
+
+        # obtain the file from the s3 bucket
         s3client.download_file(environ['BucketName'], record['body'], sample_path)
+        
+        # get the analysis results
         result = analyze()
+
+        # send results for storing in dynamodb
         print("exeworker results: {}".format(result))
-        resp = sqsclient.delete_message(QueueUrl=environ['ExeQueueUrl'],
-                ReceiptHandle=record['receiptHandle'])
+        toolkit.store_results(result)
 
     return {
         "statusCode": 200,
@@ -34,12 +43,12 @@ def analyze():
     compiletime = datetime.datetime.fromtimestamp(pe.FILE_HEADER.TimeDateStamp)
 
     sample_info = {
-            'filetype'  : 'PE32 Executable',
-            'filesize'  : path.getsize(sample_path),
-            'md5'       : hashtool.get_md5(sample_path),
-            'sha1'      : hashtool.get_sha1(sample_path),
-            #'imp_dll'   : imports,
-            'comp_time' : compiletime.strftime("%Y-%m-%d %H:%M:%S")    
+            #'imp_dll'   : {'':  imports},
+            'filetype'  : {'S' : 'PE32 Executable'},
+            'filesize'  : {'N' : str(path.getsize(sample_path))},
+            'md5'       : {'S' : str(hashtool.get_md5(sample_path))},
+            'sha1'      : {'S' : str(hashtool.get_sha1(sample_path))},
+            'comp_time' : {'N' : str(compiletime.timestamp())}
             }
 
     return sample_info

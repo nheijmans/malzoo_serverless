@@ -1,9 +1,20 @@
+""" 
+Toolkit layer for general purpose functions used across the application 
+Currently used for:
+    - Storing analysis results in DynamoDB
+
+"""
 import json
 import boto3
 
-def placeholder(sample_path):
-    """ Toolkit layer for general purpose functions used across the application """
+from os import environ as env
 
-    print("placeholder")
+ddbclient = boto3.client('dynamodb')
 
-    return results
+def store_results(data):
+    ddbclient.put_item(
+                TableName=env['Table'],
+                Item=data
+            )
+
+    return
