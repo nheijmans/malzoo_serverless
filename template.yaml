@@ -92,6 +92,7 @@ Resources:
             BatchSize: 1
       Layers:
         - !Ref HasherLayer
+        - !Ref ToolkitLayer
 
   # ================ LAYERS ==================
   HasherLayer:
@@ -105,10 +106,10 @@ Resources:
       LicenseInfo: MIT
       RetentionPolicy: retain
   
-  ToolKitLayer:
+  ToolkitLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: ToolKit
+      LayerName: toolkit
       Description: Layer with multiple functions used across the Malzoo Application
       ContentUri: layers/toolkit/
       CompatibleRuntimes:
