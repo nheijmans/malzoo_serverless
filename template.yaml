@@ -41,6 +41,7 @@ Resources:
           # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
           BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
           ExecutableQ: !Ref ExecutableQueue
+          DocumentsQ: !Ref DocumentsQueue
       Layers:
         - !Ref HasherLayer
   
