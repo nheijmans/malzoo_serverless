@@ -6,8 +6,7 @@ Globals:
   Function:
     Timeout: 30
     Tracing: Active
-    MemorySize: 128
-    Timeout: 3
+    MemorySize: 1024
   
 Resources:
 
@@ -94,6 +93,36 @@ Resources:
         - !Ref HasherLayer
         - !Ref ToolkitLayer
 
+  DocWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: doc_worker/
+      Handler: dw.lambda_handler
+      Runtime: python3.8
+      Policies:
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - S3CrudPolicy:
+            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+        - SQSPollerPolicy:
+            QueueName: !GetAtt DocumentsQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
+      Environment: 
+        Variables:
+          DocQueueUrl: !Ref DocumentsQueue
+          # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+          BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+          Table: !Ref ResultsTable
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DocumentsQueue.Arn
+            BatchSize: 1
+      Layers:
+        - !Ref HasherLayer
+        - !Ref ToolkitLayer
+
   # ================ LAYERS ==================
   HasherLayer:
     Type: AWS::Serverless::LayerVersion
@@ -119,6 +148,9 @@ Resources:
       
   # ================ QUEUE ==================
   ExecutableQueue:
+    Type: AWS::SQS::Queue
+
+  DocumentsQueue:
     Type: AWS::SQS::Queue
 
   # ================ DYNAMODB ==================
