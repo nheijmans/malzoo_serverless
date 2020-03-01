@@ -23,22 +23,22 @@ Resources:
     Properties:
       CodeUri: distributor/
       Handler: distributor.lambda_handler
-      Runtime: python3.8
+      Runtime: python3.7
       Policies:
         # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
-        - S3CrudPolicy:
-            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
-        - DynamoDBCrudPolicy:
-            TableName: MalzooResultsTable
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt ExecutableQueue.QueueName
-      Events:
-        S3Event:
-          Type: S3
-          Properties:
-            Bucket: !Ref MalzooBucket
-            Events: 
-              - 's3:ObjectCreated:*'
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:list*'
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-${AWS::AccountId}-malware"
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:HeadObject'
+                - 's3:GetObject'
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-${AWS::AccountId}-malware/*"
       Environment: 
         Variables:
           # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
