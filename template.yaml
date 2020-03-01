@@ -32,8 +32,6 @@ Resources:
             Events: 
               - 's3:ObjectCreated:*'
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: MalzooResultsTable
         - SQSSendMessagePolicy:
             QueueName: !GetAtt ExecutableQueue.QueueName
         # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
@@ -114,6 +112,8 @@ Resources:
             QueueName: !GetAtt SubmitResultsQueue.QueueName
         - SQSPollerPolicy:
             QueueName: !GetAtt ExecutableQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MalzooResultsTable
       Environment: 
         Variables:
           ResultsQueueUrl: !Ref SubmitResultsQueue
