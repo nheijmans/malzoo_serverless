@@ -24,7 +24,18 @@ Resources:
       CodeUri: distributor/
       Handler: distributor.lambda_handler
       Runtime: python3.7
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref MalzooBucket
+            Events: 
+              - 's3:ObjectCreated:*'
       Policies:
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ExecutableQueue.QueueName
         # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
         - Version: '2012-10-17'
           Statement:
