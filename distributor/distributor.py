@@ -22,6 +22,13 @@ def lambda_handler(event, context):
                 MessageBody=(s3path)
                 )
 
+    if "Composite Document File V2 Document" in filetype:
+        print("distributor: submitting sample to doc_worker")
+        response = sqsclient.send_message(
+                QueueUrl=environ['DocumentsQ'],
+                MessageBody=(s3path)
+                )
+
     return {
         "statusCode": 200,
         "body": json.dumps(

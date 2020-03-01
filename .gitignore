@@ -125,11 +125,17 @@ venv.bak/
 .dmypy.json
 dmypy.json
 
+# swp
+*.swp
+
 # Pyre type checker
 .pyre/
 
 # Filtering out packaged.yaml
 packaged.yaml
 
-# Filter out SAM config file
+# Filter out SAM config files
 samconfig.toml
+environment.json
+sqs_receive.json
+sample_put.json

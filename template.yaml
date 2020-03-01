@@ -6,8 +6,7 @@ Globals:
   Function:
     Timeout: 30
     Tracing: Active
-    MemorySize: 128
-    Timeout: 3
+    MemorySize: 1024
   
 Resources:
 
@@ -24,6 +23,12 @@ Resources:
       CodeUri: distributor/
       Handler: distributor.lambda_handler
       Runtime: python3.7
+      Policies:
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - S3CrudPolicy:
+            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ExecutableQueue.QueueName
       Events:
         S3Event:
           Type: S3
@@ -55,32 +60,10 @@ Resources:
           # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
           BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
           ExecutableQ: !Ref ExecutableQueue
-          Table: !Ref ResultsTable
+          DocumentsQ: !Ref DocumentsQueue
       Layers:
         - !Ref HasherLayer
   
-  SubmitAnalysisFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: submit_analysis/
-      Handler: sa.lambda_handler
-      Runtime: python3.8
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: MalzooResultsTable
-        - SQSPollerPolicy:
-            QueueName: !GetAtt SubmitResultsQueue.QueueName
-      Environment: 
-        Variables:
-          QueueUrl: !Ref SubmitResultsQueue
-          Table: !Ref ResultsTable
-      Events:
-        SQSResultsEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt SubmitResultsQueue.Arn
-            BatchSize: 1
-
   ReturnAnalysisFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -110,16 +93,16 @@ Resources:
         # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
         - S3CrudPolicy:
             BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
-        - SQSSendMessagePolicy:
-            QueueName: !GetAtt SubmitResultsQueue.QueueName
         - SQSPollerPolicy:
             QueueName: !GetAtt ExecutableQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
       Environment: 
         Variables:
-          ResultsQueueUrl: !Ref SubmitResultsQueue
           ExeQueueUrl: !Ref ExecutableQueue
           # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
           BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+          Table: !Ref ResultsTable
       Events:
         SQSResultsEvent:
           Type: SQS
@@ -128,6 +111,37 @@ Resources:
             BatchSize: 1
       Layers:
         - !Ref HasherLayer
+        - !Ref ToolkitLayer
+
+  DocWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: doc_worker/
+      Handler: dw.lambda_handler
+      Runtime: python3.8
+      Policies:
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - S3CrudPolicy:
+            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+        - SQSPollerPolicy:
+            QueueName: !GetAtt DocumentsQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
+      Environment: 
+        Variables:
+          DocQueueUrl: !Ref DocumentsQueue
+          # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+          BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+          Table: !Ref ResultsTable
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DocumentsQueue.Arn
+            BatchSize: 1
+      Layers:
+        - !Ref HasherLayer
+        - !Ref ToolkitLayer
 
   # ================ LAYERS ==================
   HasherLayer:
@@ -141,10 +155,10 @@ Resources:
       LicenseInfo: MIT
       RetentionPolicy: retain
   
-  ToolKitLayer:
+  ToolkitLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
-      LayerName: ToolKit
+      LayerName: toolkit
       Description: Layer with multiple functions used across the Malzoo Application
       ContentUri: layers/toolkit/
       CompatibleRuntimes:
@@ -153,10 +167,10 @@ Resources:
       RetentionPolicy: retain
       
   # ================ QUEUE ==================
-  SubmitResultsQueue:
+  ExecutableQueue:
     Type: AWS::SQS::Queue
 
-  ExecutableQueue:
+  DocumentsQueue:
     Type: AWS::SQS::Queue
 
   # ================ DYNAMODB ==================
@@ -178,6 +192,3 @@ Outputs:
     Description: "API Gateway endpoint URL for Prod stage for Serverless Malzoo"
     Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
 
-  MalzooSubmitQueueURL:
-    Description: "SQS Queue URL"
-    Value: !Ref SubmitResultsQueue
