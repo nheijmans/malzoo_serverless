@@ -6,8 +6,7 @@ Globals:
   Function:
     Timeout: 30
     Tracing: Active
-    MemorySize: 128
-    Timeout: 3
+    MemorySize: 1024
   
 Resources:
 
@@ -23,7 +22,7 @@ Resources:
     Properties:
       CodeUri: distributor/
       Handler: distributor.lambda_handler
-      Runtime: python3.8
+      Runtime: python3.7
       Policies:
         # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
         - S3CrudPolicy:
@@ -37,11 +36,29 @@ Resources:
             Bucket: !Ref MalzooBucket
             Events: 
               - 's3:ObjectCreated:*'
+      Policies:
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt ExecutableQueue.QueueName
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:list*'
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-${AWS::AccountId}-malware"
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - 's3:HeadObject'
+                - 's3:GetObject'
+              Resource: !Sub "arn:aws:s3:::${AWS::StackName}-${AWS::AccountId}-malware/*"
       Environment: 
         Variables:
           # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
           BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
           ExecutableQ: !Ref ExecutableQueue
+          DocumentsQ: !Ref DocumentsQueue
       Layers:
         - !Ref HasherLayer
   
@@ -77,7 +94,7 @@ Resources:
         - SQSPollerPolicy:
             QueueName: !GetAtt ExecutableQueue.QueueName
         - DynamoDBCrudPolicy:
-            TableName: MalzooResultsTable
+            TableName: !Ref MalzooResultsTable
       Environment: 
         Variables:
           ExeQueueUrl: !Ref ExecutableQueue
@@ -89,6 +106,36 @@ Resources:
           Type: SQS
           Properties:
             Queue: !GetAtt ExecutableQueue.Arn
+            BatchSize: 1
+      Layers:
+        - !Ref HasherLayer
+        - !Ref ToolkitLayer
+
+  DocWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: doc_worker/
+      Handler: dw.lambda_handler
+      Runtime: python3.8
+      Policies:
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - S3CrudPolicy:
+            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+        - SQSPollerPolicy:
+            QueueName: !GetAtt DocumentsQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: MalzooResultsTable
+      Environment: 
+        Variables:
+          DocQueueUrl: !Ref DocumentsQueue
+          # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+          BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+          Table: !Ref ResultsTable
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt DocumentsQueue.Arn
             BatchSize: 1
       Layers:
         - !Ref HasherLayer
@@ -119,6 +166,9 @@ Resources:
       
   # ================ QUEUE ==================
   ExecutableQueue:
+    Type: AWS::SQS::Queue
+
+  DocumentsQueue:
     Type: AWS::SQS::Queue
 
   # ================ DYNAMODB ==================
