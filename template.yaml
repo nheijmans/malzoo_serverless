@@ -6,7 +6,7 @@ Globals:
   Function:
     Timeout: 30
     Tracing: Active
-    MemorySize: 1024
+    MemorySize: 256
   
 Resources:
 
@@ -20,6 +20,7 @@ Resources:
   DistributorFunction:
     Type: AWS::Serverless::Function
     Properties:
+      ReservedConcurrentExecutions: 5
       CodeUri: distributor/
       Handler: distributor.lambda_handler
       Runtime: python3.6
@@ -63,6 +64,7 @@ Resources:
   ReturnAnalysisFunction:
     Type: AWS::Serverless::Function
     Properties:
+      ReservedConcurrentExecutions: 5
       CodeUri: return_analysis/
       Handler: ra.lambda_handler
       Runtime: python3.8
@@ -82,6 +84,7 @@ Resources:
   ExeWorkerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      ReservedConcurrentExecutions: 5
       CodeUri: exe_worker/
       Handler: ew.lambda_handler
       Runtime: python3.8
@@ -112,6 +115,7 @@ Resources:
   DocWorkerFunction:
     Type: AWS::Serverless::Function
     Properties:
+      ReservedConcurrentExecutions: 5
       CodeUri: doc_worker/
       Handler: dw.lambda_handler
       Runtime: python3.8
