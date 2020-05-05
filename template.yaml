@@ -5,7 +5,7 @@ Description:  Malzoo Serverless
 Globals:
   Function:
     Timeout: 30
-    Tracing: Active
+    #Tracing: Active
     MemorySize: 256
   
 Resources:
@@ -39,6 +39,8 @@ Resources:
             QueueName: !GetAtt ExecutableQueue.QueueName
         - SQSSendMessagePolicy:
             QueueName: !GetAtt DocumentsQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt OthersQueue.QueueName
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -58,6 +60,7 @@ Resources:
           BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
           ExecutableQ: !Ref ExecutableQueue
           DocumentsQ: !Ref DocumentsQueue
+          OthersQ: !Ref OthersQueue
       Layers:
         - !Ref HasherLayer
   
@@ -143,6 +146,37 @@ Resources:
         - !Ref HasherLayer
         - !Ref ToolkitLayer
 
+  OtherWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      ReservedConcurrentExecutions: 5
+      CodeUri: other_worker/
+      Handler: ow.lambda_handler
+      Runtime: python3.8
+      Policies:
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - S3CrudPolicy:
+            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+        - SQSPollerPolicy:
+            QueueName: !GetAtt OthersQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ResultsTable
+      Environment: 
+        Variables:
+          DocQueueUrl: !Ref OthersQueue
+          # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+          BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+          Table: !Ref ResultsTable
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OthersQueue.Arn
+            BatchSize: 1
+      Layers:
+        - !Ref HasherLayer
+        - !Ref ToolkitLayer
+
   # ================ LAYERS ==================
   HasherLayer:
     Type: AWS::Serverless::LayerVersion
@@ -173,6 +207,9 @@ Resources:
   DocumentsQueue:
     Type: AWS::SQS::Queue
 
+  OthersQueue:
+    Type: AWS::SQS::Queue
+
   # ================ DYNAMODB ==================
   ResultsTable:
     Type: "AWS::DynamoDB::Table"
@@ -191,4 +228,3 @@ Outputs:
   MalzooApi:
     Description: "API Gateway endpoint URL for Prod stage for Serverless Malzoo"
     Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
-
