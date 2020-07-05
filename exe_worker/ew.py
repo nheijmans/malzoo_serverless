@@ -15,10 +15,6 @@ sample_path = "/tmp/sample.bin"
 
 def lambda_handler(event, context):
     for record in event['Records']:
-        # remove the record from the queue
-#        resp = sqsclient.delete_message(QueueUrl=environ['ExeQueueUrl'],
-#                ReceiptHandle=record['receiptHandle'])
-
         # obtain the file from the s3 bucket
         s3client.download_file(environ['BucketName'], record['body'], sample_path)
         
