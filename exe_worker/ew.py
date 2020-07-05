@@ -15,10 +15,6 @@ sample_path = "/tmp/sample.bin"
 
 def lambda_handler(event, context):
     for record in event['Records']:
-        # remove the record from the queue
-#        resp = sqsclient.delete_message(QueueUrl=environ['ExeQueueUrl'],
-#                ReceiptHandle=record['receiptHandle'])
-
         # obtain the file from the s3 bucket
         s3client.download_file(environ['BucketName'], record['body'], sample_path)
         
@@ -43,14 +39,20 @@ def analyze():
     compiletime = datetime.datetime.fromtimestamp(pe.FILE_HEADER.TimeDateStamp)
 
     sample_info = {
-            #'imp_dll'   : {'':  imports},
+            'comp_time' : {'N' : str(compiletime.timestamp())},
             'filetype'  : {'S' : 'PE32 Executable'},
             'filesize'  : {'N' : str(path.getsize(sample_path))},
             'md5'       : {'S' : str(hashtool.get_md5(sample_path))},
             'sha1'      : {'S' : str(hashtool.get_sha1(sample_path))},
-            'comp_time' : {'N' : str(compiletime.timestamp())}
+            'imphash'   : {'S' : str(pe.get_imphash())},
+            'imports'   : {'SS' : get_imports(pe)}
             }
 
     return sample_info
     
-
+def get_imports(pe):
+    imports = []
+    for entry in pe.DIRECTORY_ENTRY_IMPORT:
+        imports.append(entry.dll.decode('utf-8'))
+    
+    return imports
