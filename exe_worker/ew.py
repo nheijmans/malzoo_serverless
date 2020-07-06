@@ -35,7 +35,6 @@ def lambda_handler(event, context):
 def analyze():
     pe =  pefile.PE(sample_path, fast_load=True)
     pe.full_load()
-    #imports     = [ entry.dll for entry in pe.DIRECTORY_ENTRY_IMPORT ]
     compiletime = datetime.datetime.fromtimestamp(pe.FILE_HEADER.TimeDateStamp)
 
     sample_info = {
