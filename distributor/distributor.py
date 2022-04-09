@@ -35,6 +35,12 @@ def lambda_handler(event, context):
                 MessageBody=(s3path)
                 )
 
+    print("distributor: submitting sample to yara_worker")
+    response = sqsclient.send_message(
+            QueueUrl=environ['YaraQ'],
+            MessageBody=(s3path)
+            )
+
     return {
         "statusCode": 200,
         "body": json.dumps(
