@@ -4,9 +4,9 @@ Description:  Malzoo Serverless
 
 Globals:
   Function:
-    Timeout: 30
+    Timeout: 60
     #Tracing: Active
-    MemorySize: 256
+    MemorySize: 512
   
 Resources:
 
@@ -41,6 +41,8 @@ Resources:
             QueueName: !GetAtt DocumentsQueue.QueueName
         - SQSSendMessagePolicy:
             QueueName: !GetAtt OthersQueue.QueueName
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt YaraQueue.QueueName
         - Version: '2012-10-17'
           Statement:
             - Effect: Allow
@@ -61,6 +63,7 @@ Resources:
           ExecutableQ: !Ref ExecutableQueue
           DocumentsQ: !Ref DocumentsQueue
           OthersQ: !Ref OthersQueue
+          YaraQ: !Ref YaraQueue
       Layers:
         - !Ref HasherLayer
   
@@ -177,6 +180,44 @@ Resources:
         - !Ref HasherLayer
         - !Ref ToolkitLayer
 
+  YaraWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 60
+      Events:
+        SQSResultsEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OthersQueue.Arn
+            BatchSize: 1
+      Policies:
+        # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+        - S3CrudPolicy:
+            BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+        - SQSPollerPolicy:
+            QueueName: !GetAtt YaraQueue.QueueName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ResultsTable
+      Environment: 
+        Variables:
+          YaraQueueUrl: !Ref YaraQueue
+          Region: !Sub "${AWS::Region}"
+          # workaround to fix - we need enter the bucketname as a string instead of a !Ref to the object
+          BucketName: !Sub "${AWS::StackName}-${AWS::AccountId}-malware"
+          Table: !Ref ResultsTable
+      PackageType: Image
+      ImageConfig:
+        Command: ["yara_worker.handler"]
+        WorkingDirectory: "/function/"
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: yara_worker/python/
+      DockerTag: v1
+      ReservedConcurrentExecutions: 5
+    Layers:
+      - !Ref HasherLayer
+      - !Ref ToolkitLayer
+
   # ================ LAYERS ==================
   HasherLayer:
     Type: AWS::Serverless::LayerVersion
@@ -210,6 +251,8 @@ Resources:
   OthersQueue:
     Type: AWS::SQS::Queue
 
+  YaraQueue:
+    Type: AWS::SQS::Queue
   # ================ DYNAMODB ==================
   ResultsTable:
     Type: "AWS::DynamoDB::Table"
