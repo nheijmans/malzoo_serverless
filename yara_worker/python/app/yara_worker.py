@@ -32,8 +32,6 @@ def match():
     
     rules = yara.compile(filepaths=rules_dict)
     matches = rules.match(sample_path)
-    print(type(matches[0]))
-    print(matches[0])
     list_matches = [str(m) for m in matches]
     print(list_matches)
 
