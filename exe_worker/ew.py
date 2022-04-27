@@ -19,7 +19,7 @@ def lambda_handler(event, context):
         s3client.download_file(environ['BucketName'], record['body'], sample_path)
         
         # get the analysis results
-        result = analyze()
+        result = analyze(record['body'])
 
         # send results for storing in dynamodb
         print("exeworker results: {}".format(result))
@@ -32,7 +32,7 @@ def lambda_handler(event, context):
         ),
     }
 
-def analyze():
+def analyze(s3path):
     pe =  pefile.PE(sample_path, fast_load=True)
     pe.full_load()
     compiletime = datetime.datetime.fromtimestamp(pe.FILE_HEADER.TimeDateStamp)
@@ -44,7 +44,8 @@ def analyze():
             'md5'       : {'S' : str(hashtool.get_md5(sample_path))},
             'sha1'      : {'S' : str(hashtool.get_sha1(sample_path))},
             'imphash'   : {'S' : str(pe.get_imphash())},
-            'imports'   : {'SS' : get_imports(pe)}
+            'imports'   : {'SS' : get_imports(pe)},
+            'tag'       : {'S' : get_tag(s3path)}
             }
 
     return sample_info
@@ -55,3 +56,12 @@ def get_imports(pe):
         imports.append(entry.dll.decode('utf-8'))
     
     return imports
+
+def get_tag(s3path):
+    """ simple func to get the s3 path """
+    if len(s3path.split('/')) > 1:
+        tag = s3path.split('/')[0]
+    else:
+        tag = "empty"
+
+    return tag
